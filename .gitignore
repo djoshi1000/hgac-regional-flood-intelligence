@@ -61,3 +61,12 @@ logs/
 Thumbs.db
 .vscode/
 .idea/
+# ==========================================================
+# Local legacy/version files retained on workstation only
+# Added automatically by SAFE_GITHUB_CLEANUP.ps1
+# ==========================================================
+README_V5*.md
+RUN_V5*.ps1
+setup_windows.bat
+legacy_streamlit_app.py
+requirements_v5*.txt

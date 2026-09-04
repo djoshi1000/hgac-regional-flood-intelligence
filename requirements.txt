@@ -1,3 +1,6 @@
+﻿# H-GAC Regional Flood Intelligence - consolidated dependencies
+# Existing dependencies were retained; no requirement was intentionally removed.
+
 streamlit>=1.40
 streamlit-folium>=0.23
 folium>=0.18
@@ -14,3 +17,8 @@ pyflwdir>=0.5.12
 scipy>=1.14
 scikit-learn>=1.5
 matplotlib>=3.9
+plotly>=5.20
+streamlit-autorefresh>=1.0.1
+Flask>=3.0,<4
+waitress>=3.0
+Pillow>=10.0

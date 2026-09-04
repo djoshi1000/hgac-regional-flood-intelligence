@@ -1,4 +1,0 @@
-# Existing prototype dependencies remain required.
-# V5 adds these UI packages if they are not already installed.
-plotly>=5.20
-streamlit-autorefresh>=1.0.1
