@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>H-GAC Flood Intelligence</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand-wrap"><div class="brand-mark">HG</div><div><div class="brand">H-GAC Regional Flood Intelligence</div><div class="brand-sub">Select a waterway. The app handles the gauge, data, terrain, forecast and flood screen.</div></div></div>
+  <div class="top-actions"><span id="catalogChip" class="status-chip neutral"><span class="dot"></span>Regional data loading</span><button id="helpBtn" class="icon-btn">?</button></div>
+</header>
+
+<section id="nextAction" class="next-action info">
+  <div class="next-icon">1</div><div><div class="next-title">Loading the H-GAC waterway map</div><div class="next-text">When the map is ready, click the bayou, river or stream you want to analyze.</div></div>
+</section>
+
+<main class="workspace-layout simple-layout">
+  <aside class="workflow-panel simple-panel">
+    <div class="panel-title-row"><div><div class="eyebrow">SIMPLE WORKFLOW</div><h2>One selection, one analysis</h2></div><button id="resetBtn" class="text-btn">Start over</button></div>
+
+    <div class="step-card active" id="stepCard1">
+      <div class="step-head"><div class="step-number" id="stepNum1">1</div><div><div class="step-title">Select a waterway</div><div class="step-state" id="stepState1">Waiting for regional map</div></div></div>
+      <p class="step-copy">Click on a bayou, river or stream. That selected polyline becomes the branch the terrain model follows.</p>
+      <div id="selectionCard" class="selection-card hidden"></div>
+    </div>
+
+    <div class="step-card locked" id="stepCard2">
+      <div class="step-head"><div class="step-number" id="stepNum2">2</div><div><div class="step-title">Run flood intelligence</div><div class="step-state" id="stepState2">Select a waterway first</div></div></div>
+      <p class="step-copy">No gauge selection is required. The app automatically finds a safe downstream USGS control, gets historical flow and rainfall information, prepares/caches terrain, reads NWM and Flood Hub when configured, and creates flood products.</p>
+      <button id="runAllBtn" class="primary-btn wide" disabled>Run complete analysis</button>
+      <div id="autoSourceCard" class="workspace-hint hidden"></div>
+    </div>
+
+    <div class="step-card locked" id="stepCard3">
+      <div class="step-head"><div class="step-number" id="stepNum3">3</div><div><div class="step-title">Near-real-time monitoring</div><div class="step-state" id="stepState3">Run the analysis first</div></div></div>
+      <p class="step-copy">After the first run, DEM/HAND/banks are cached. Live refresh only updates USGS, NWM and flood-screen outputs.</p>
+      <button id="refreshLiveBtn" class="secondary-btn wide" disabled>Refresh live data now</button>
+      <label class="switch-row"><span><strong>Auto refresh</strong><small>Every 5 minutes while this page is open</small></span><span class="switch"><input id="autoRefresh" type="checkbox" disabled><span class="slider"></span></span></label>
+    </div>
+
+    <div class="recent-box"><div class="recent-title">Cached analyses</div><div id="recentWorkspaces" class="recent-list"><span class="muted">No cached workspaces yet.</span></div></div>
+  </aside>
+
+  <section class="map-panel">
+    <div id="map"></div>
+    <div class="map-toolbar"><div id="mapInstruction" class="map-instruction"><span class="pulse-dot"></span> Loading waterways…</div><div class="map-tools"><button id="fitRegionBtn" class="secondary-btn small">H-GAC extent</button><button id="fitModelBtn" class="secondary-btn small" disabled>Model extent</button></div></div>
+    <div id="mapLoading" class="map-overlay"><div class="loader-ring"></div><div class="overlay-title">Preparing regional waterway map</div><div class="overlay-copy">Loading H-GAC boundary, HCFCD channels and NHDPlus streams.</div></div>
+    <div class="legend"><div class="legend-title">Map</div><div><span class="legend-line hcfcd"></span>HCFCD channel</div><div><span class="legend-line nhd"></span>NHDPlus stream</div><div><span class="legend-line selected"></span>Selected waterway</div><div><span class="legend-fill flood"></span>Preferred flood extent</div></div>
+  </section>
+</main>
+
+<section id="dashboardSection" class="dashboard-section hidden">
+  <div class="dashboard-heading"><div><div class="eyebrow">RESULTS</div><h2 id="dashboardTitle">Flood intelligence dashboard</h2></div><div id="lastRefresh" class="refresh-time"></div></div>
+  <div class="metric-grid">
+    <div class="metric-card"><div class="metric-label">USGS discharge</div><div id="metricUSGSQ" class="metric-value">—</div><div class="metric-sub">current observation</div></div>
+    <div class="metric-card"><div class="metric-label">USGS stage</div><div id="metricUSGSStage" class="metric-value">—</div><div class="metric-sub">gage height</div></div>
+    <div class="metric-card"><div class="metric-label">NWM peak</div><div id="metricNWM" class="metric-value">—</div><div class="metric-sub">forecast flow</div></div>
+    <div class="metric-card"><div class="metric-label">Flood area</div><div id="metricArea" class="metric-value">—</div><div class="metric-sub">volume-limited screen</div></div>
+    <div class="metric-card"><div class="metric-label">Max floodplain depth</div><div id="metricDepth" class="metric-value">—</div><div class="metric-sub">channel excluded</div></div>
+    <div class="metric-card"><div class="metric-label">Overtopped sections</div><div id="metricOvertop" class="metric-value">—</div><div class="metric-sub">LiDAR bank screen</div></div>
+  </div>
+
+  <div class="dashboard-tabs">
+    <button class="tab-btn active" data-tab="forecast">Current & forecast</button>
+    <button class="tab-btn" data-tab="history">Historical trends</button>
+    <button class="tab-btn" data-tab="rain">Rainfall + Google Flood Hub</button>
+    <button class="tab-btn" data-tab="scenario">Scenario Lab</button>
+    <button class="tab-btn" data-tab="hydraulic">Hydraulic profile</button>
+    <button class="tab-btn" data-tab="qa">QA</button>
+    <button class="tab-btn" data-tab="cache">Cache</button>
+  </div>
+
+  <div id="tab-forecast" class="tab-panel active"><div class="chart-grid"><div class="chart-card"><div class="chart-title">NOAA National Water Model forecast</div><canvas id="nwmChart"></canvas></div><div class="chart-card"><div class="chart-title">Recent USGS discharge</div><canvas id="usgsChart"></canvas></div></div></div>
+  <div id="tab-history" class="tab-panel"><div class="chart-grid"><div class="chart-card large"><div class="chart-title">USGS period-of-record daily mean streamflow</div><canvas id="historyChart"></canvas></div><div class="chart-card"><div class="chart-title">Historical rainfall at the same USGS site, when measured</div><canvas id="rainHistoryChart"></canvas></div></div></div>
+  <div id="tab-rain" class="tab-panel">
+    <div class="meaning-strip">
+      <div><strong>USGS</strong><span>What the river is doing now</span></div>
+      <div><strong>NOAA NWM</strong><span>US government streamflow forecast</span></div>
+      <div><strong>Google Flood Hub</strong><span>Independent AI flood forecast/status and Google inundation polygons when available</span></div>
+      <div><strong>Local LiDAR screen</strong><span>Translates forecast flow/WSE to a high-resolution local terrain screening map</span></div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card"><div class="chart-title">NWS quantitative precipitation forecast at selected waterway</div><canvas id="rainForecastChart"></canvas></div>
+      <div class="chart-card"><div class="chart-title">Google Flood Hub — model/status</div><div id="floodHubBox" class="qa-grid"></div></div>
+      <div class="chart-card large"><div class="chart-title">Google Flood Hub forecast (independent comparison)</div><canvas id="floodHubChart"></canvas></div>
+    </div>
+    <div class="help-note">Flood Hub is not the engine that creates the local DEM flood map. Its role here is independent AI evidence: compare Google's forecast/status with NOAA NWM and, when Google provides an inundation polygon, overlay it against the local LiDAR-derived screen.</div>
+  </div>
+  <div id="tab-scenario" class="tab-panel">
+    <div class="scenario-layout">
+      <div class="scenario-card">
+        <div class="eyebrow">WHAT-IF RAINFALL</div>
+        <h3>Rainfall Scenario Lab</h3>
+        <p>Example: “What if 11 inches falls over 5 hours in this selected bayou?” The app converts rainfall to a basin runoff hydrograph, then runs the cached local flood screen.</p>
+        <div class="form-grid">
+          <label>Storm total (inches)<input id="scenarioRain" type="number" min="0.1" max="40" step="0.1" value="11"></label>
+          <label>Storm duration (hours)<input id="scenarioDuration" type="number" min="0.25" max="72" step="0.25" value="5"></label>
+          <label>Antecedent wetness<select id="scenarioWetness"><option value="dry">Dry</option><option value="normal" selected>Normal</option><option value="wet">Wet / saturated</option></select></label>
+        </div>
+        <button id="runScenarioBtn" class="primary-btn wide">Run rainfall scenario</button>
+        <div class="scenario-disclaimer"><strong>Important:</strong> Google Flood Hub does not accept an arbitrary rainfall total as a custom forcing through its public forecast API. This what-if run therefore uses a transparent NRCS Curve Number + SCS runoff hydrograph and the local LiDAR/HAND screen. Flood Hub stays on the dashboard as an independent live comparison.</div>
+      </div>
+      <div class="scenario-card">
+        <div class="chart-title">Scenario results</div>
+        <div id="scenarioMetrics" class="qa-grid"><div class="qa-item"><div class="qa-k">Status</div><div class="qa-v">Run a scenario to see results</div></div></div>
+      </div>
+    </div>
+    <div class="chart-card large"><div class="chart-title">Scenario rainfall-runoff hydrograph</div><canvas id="scenarioHydroChart"></canvas></div>
+    <div class="scenario-actions"><button id="showScenarioMapBtn" class="secondary-btn" disabled>Show scenario flood map</button><button id="showLiveMapBtn" class="secondary-btn">Return to live map</button></div>
+  </div>
+  <div id="tab-hydraulic" class="tab-panel"><div class="chart-card large"><div class="chart-title">Local flow vs stabilized bankfull capacity</div><canvas id="profileChart"></canvas></div></div>
+  <div id="tab-qa" class="tab-panel"><div id="qaGrid" class="qa-grid"></div></div>
+  <div id="tab-cache" class="tab-panel"><div class="cache-layout"><div class="cache-card"><div class="chart-title">Regional DEM cache</div><div id="cacheStats" class="cache-stats"></div><div class="cache-actions"><button id="buildVrtBtn" class="secondary-btn">Build/update VRT</button><button id="buildArcPyBtn" class="secondary-btn">Build/update ArcPy mosaic</button></div></div></div></div>
+</section>
+
+<aside id="jobDrawer" class="job-drawer hidden">
+  <div class="job-head"><div><div class="eyebrow">PROCESS ACTIVITY</div><div id="jobTitle" class="job-title">Working…</div></div><span id="jobStatusBadge" class="job-badge running">RUNNING</span></div>
+  <div class="job-current"><div class="job-spinner" id="jobSpinner"></div><div><div id="jobStep" class="job-step">Starting</div><div id="jobMessage" class="job-message">Please wait…</div></div></div>
+  <div class="progress-track"><div id="jobProgress" class="progress-fill" style="width:0%"></div></div><div class="progress-meta"><span id="jobPercent">0%</span><span id="jobElapsed">00:00</span></div>
+  <div id="jobHelp" class="job-help">Keep this browser tab open while the operation runs.</div><div class="event-title">Recent activity</div><div id="jobEvents" class="job-events"></div><button id="dismissJobBtn" class="secondary-btn wide hidden">Close activity panel</button>
+</aside>
+
+<div id="toastContainer" class="toast-container"></div>
+<div id="helpModal" class="modal hidden"><div class="modal-card"><button id="closeHelp" class="modal-close">×</button><div class="eyebrow">HOW TO USE THIS APP</div><h2>Only two things are required</h2><ol class="help-list"><li><strong>Click a waterway.</strong> That polyline/branch is the model target.</li><li><strong>Click Run complete analysis.</strong> Gauge screening, historical records, rainfall, DEM/HAND, rating curve, NWM/Flood Hub and flood mapping are handled automatically.</li></ol><div class="help-note">The first run can take time because DEM and terrain products are built. They are cached, so future live refreshes are much faster.</div></div></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

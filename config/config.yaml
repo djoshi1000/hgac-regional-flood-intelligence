@@ -1,0 +1,191 @@
+project:
+  name: "HGAC Hunting Bayou Flood Intelligence Prototype"
+  timezone: "America/Chicago"
+
+
+pilot:
+  usgs_site: "08075770"
+  usgs_site_name: "Hunting Bayou at IH 610, Houston, TX"
+  nws_gauge: "HTGT2"
+
+  gauge_lat: 29.79328217
+  gauge_lon: -95.2679907
+
+  expected_drainage_area_sqmi: 16.1
+
+
+usgs:
+  iv_period: "P7D"
+
+
+nldi:
+  split_catchment: false
+  simplified: false
+
+
+nwm:
+  reach_id: "auto"
+  preferred_series: "short_range"
+
+  # Confirmed for the current NWPS Hunting Bayou endpoint.
+  value_unit: "cfs"
+
+
+floodhub:
+  # Keep intentionally inactive for now.
+  gauge_id: ""
+  search_padding_deg: 0.10
+  include_non_quality_verified: true
+  include_gauges_without_hydro_model: false
+
+
+dem:
+  project: "TX_Houston_B24"
+
+  work_units:
+    - "TX_Houston_1_B24"
+    - "TX_Houston_2_B24"
+    - "TX_Houston_3_B24"
+    - "TX_Houston_4_B24"
+
+  hydraulic_resolution_m: 1.0
+  analysis_resolution_m: 2.0
+  download_workers: 4
+
+
+terrain:
+  stream_threshold_km2: 5.0
+  mainstem_threshold_km2: 8.0
+
+  gauge_snap_max_m: 250.0
+
+  min_depth_m: 0.05
+  max_hand_m: 12.0
+
+  screening_overbank_stage_ft: 36.0
+
+
+# ============================================================
+# V4.3 HYDRAULIC SCREENING SETTINGS
+# ============================================================
+
+hydraulics:
+
+  # Local event discharge decreases upstream according to
+  # contributing drainage area.
+  flow_area_exponent: 0.85
+
+  # Expected bankfull-capacity scaling with drainage area.
+  capacity_area_exponent: 0.70
+
+  # Below-bank stage relationship.
+  contained_stage_exponent: 0.60
+
+  # Controls how local overbank depth changes with
+  # local flow/capacity conditions.
+  overbank_excess_exponent: 0.70
+
+  # Cross-section hydraulic-capacity QA.
+  capacity_outlier_factor: 3.0
+
+  # Do not allow uncertain LiDAR geometry to create
+  # unrealistically low capacity.
+  capacity_floor_factor: 1.00
+
+  # Allow geometry to indicate moderately larger capacity.
+  capacity_ceiling_factor: 1.50
+
+  # Absolute safety limit.
+  max_local_overbank_ft: 12.0
+
+  # Prevent a small gauge exceedance from exploding
+  # into extreme upstream overbank depths.
+  max_local_overbank_multiplier: 1.5
+
+  # Maximum longitudinal influence assigned to a
+  # particular cross-section WSE.
+  max_section_influence_m: 1200.0
+
+  # V4.2+:
+  # LiDAR-derived bank-to-bank channel corridor is excluded
+  # from floodplain area, storage and depth statistics.
+  channel_exclusion_buffer_m: 2.0
+
+  # Hydrograph intervals larger than this are not integrated
+  # blindly across missing forecast periods.
+  hydrograph_max_interval_hours: 3.0
+
+  # Used only for synthetic/manual constant-flow scenarios.
+  # --nwm-live and --hydrograph-csv use hydrograph integration.
+  screening_duration_hours: 6.0
+
+  # Fraction of estimated excess river volume made available
+  # to the terrain-based floodplain storage screen.
+  floodplain_volume_fraction: 1.0
+
+  # Penalizes propagation uphill during volume-limited fill.
+  volume_uphill_penalty: 8.0
+
+  volume_warning_ratio: 1.5
+
+  # QA threshold only.
+  deep_depth_threshold_m: 1.5
+
+
+# ============================================================
+# V4.3 OPTIONAL AOI SUPPORT
+# ============================================================
+
+aoi:
+
+  # Keep false for the current full Hunting Bayou pilot.
+  # Change to true when you want to visualize/evaluate
+  # only a particular AOI.
+  enabled: false
+
+  # Example when enabled:
+  # path: "data/aoi/my_aoi.geojson"
+  path: ""
+
+  # Hydraulic calculation remains full-domain.
+  # Only the final visualization/evaluation product is clipped.
+  display_clip: true
+
+  # QA/model context around AOI and gauge.
+  hydraulic_context_buffer_m: 1000.0
+
+  mainstem_context_buffer_m: 250.0
+
+  # If gauge lies just outside AOI, still show it on map
+  # so its hydraulic relationship is visible.
+  map_include_gauge: true
+
+
+# ============================================================
+# FUTURE MULTIPLE-GAUGE SUPPORT
+# ============================================================
+
+gauge_network:
+
+  # Leave empty for the current single-gauge pilot.
+  stage_controls: []
+
+
+paths:
+  raw: "data/raw"
+  processed: "data/processed"
+  outputs: "outputs"
+
+  basin_geojson: "data/processed/hunting_bayou_basin.geojson"
+
+  dem_hydraulic: "data/processed/dem_hydraulic_1m.tif"
+  dem_analysis: "data/processed/dem_analysis_2m.tif"
+
+  hand: "data/processed/hand_2m.tif"
+  upstream_area: "data/processed/upstream_area_km2.tif"
+  stream_mask: "data/processed/stream_mask.tif"
+
+  rating_curve_csv: "data/processed/rating_curve.csv"
+
+  latest_inundation: "outputs/latest_depth.tif"
+  latest_inundation_geojson: "outputs/latest_inundation.geojson"

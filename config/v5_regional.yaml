@@ -1,0 +1,44 @@
+regional:
+  catalog_cache: "data/regional_cache/catalog"
+  hcfcd_click_tolerance_m: 1500.0
+  nhd_search_radius_m: 6000.0
+  gauge_search_radius_km: 30.0
+  gauge_candidates_to_test: 8
+  default_auto_refresh_minutes: 5
+  mainstem_match_tolerance_m: 500.0
+
+dem_cache:
+  # Persistent cache shared by every selected bayou workspace.
+  cache_root: "data/regional_cache/dem"
+
+  # Fastest mode: point this at a locally built VRT/COG/GeoTIFF covering your
+  # region. Leave blank to download/cache only the Houston B24 tiles needed by
+  # each selected bayou.
+  regional_dem_path: ""
+
+  # The full gauge basin is analyzed at 2 m, while the 1 m DEM is cropped only
+  # to this corridor around the derived mainstem for bank cross sections.
+  hydraulic_corridor_buffer_m: 250.0
+
+  # Memory-safe regional routing. Large basins automatically use the smallest
+  # working resolution that keeps the full-basin routing grid under this cell
+  # budget. The cached source LiDAR is not deleted, and 1 m is still used later
+  # for bank/cross-section extraction.
+  max_analysis_cells: 12000000
+  adaptive_analysis_resolutions_m: [2, 3, 4, 5, 6, 8, 10, 12, 15, 20]
+  max_fallback_resolution_m: 30
+
+  # Optional ArcGIS Pro mosaic dataset metadata. The current rasterio pipeline
+  # consumes a VRT/GeoTIFF directly; ArcPy mosaic creation is provided as a
+  # cache-management utility.
+  arcpy_mosaic_gdb: "data/regional_cache/HGAC_DEM_Cache.gdb"
+  arcpy_mosaic_name: "HGAC_DEM_CACHE"
+
+live:
+  auto_refresh_enabled_default: false
+  auto_refresh_minutes: 5
+  minimum_refresh_minutes: 3
+
+ui:
+  default_basemap: "Carto Dark"
+  map_height_px: 610

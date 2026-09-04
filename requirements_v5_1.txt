@@ -1,0 +1,5 @@
+Flask>=3.0,<4
+waitress>=3.0
+Pillow>=10.0
+# Existing project geospatial/model dependencies are still required and are
+# preserved from the current .venv / root requirements.

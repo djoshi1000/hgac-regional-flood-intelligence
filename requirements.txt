@@ -1,0 +1,16 @@
+streamlit>=1.40
+streamlit-folium>=0.23
+folium>=0.18
+requests>=2.32
+pandas>=2.2
+numpy>=2.0
+PyYAML>=6.0
+python-dotenv>=1.0
+geopandas>=1.0
+shapely>=2.0
+pyproj>=3.7
+rasterio>=1.4
+pyflwdir>=0.5.12
+scipy>=1.14
+scikit-learn>=1.5
+matplotlib>=3.9
