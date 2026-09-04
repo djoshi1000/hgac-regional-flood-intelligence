@@ -1,6 +1,6 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
-"""H-GAC Regional Flood Intelligence V5.2 guided local web application.
+"""H-GAC Regional Flood Intelligence V5.3 guided local/public web application.
 
 This is intentionally NOT a Streamlit app.  It uses Flask + a small browser UI
 so long-running DEM/terrain jobs can continue in the background while the UI
@@ -43,6 +43,11 @@ from src.config import load_config
 
 
 APP_ROOT = Path(__file__).resolve().parent
+RUNTIME_ROOT = Path(
+    os.getenv("HGAC_RUNTIME_ROOT", str(APP_ROOT))
+).expanduser().resolve()
+RUNTIME_ROOT.mkdir(parents=True, exist_ok=True)
+PUBLIC_MODE = os.getenv("HGAC_PUBLIC_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
 REGIONAL_CONFIG_PATH = APP_ROOT / "config" / "v5_regional.yaml"
 ROOT_CONFIG_PATH = APP_ROOT / "config" / "config.yaml"
 
@@ -121,6 +126,20 @@ def regional_cfg() -> dict:
     cfg.setdefault("dem_cache", {})
     cfg.setdefault("live", {})
     cfg.setdefault("ui", {})
+
+    # cloud_runtime_cache_override:
+    # When HGAC_RUNTIME_ROOT is set (e.g. Render persistent disk), keep all
+    # expensive cache products outside the ephemeral application filesystem.
+    if os.getenv("HGAC_RUNTIME_ROOT"):
+        cfg["regional"]["catalog_cache"] = str(
+            RUNTIME_ROOT / "data" / "regional_cache" / "catalog"
+        )
+        cfg["dem_cache"]["cache_root"] = str(
+            RUNTIME_ROOT / "data" / "regional_cache" / "dem"
+        )
+        cfg["dem_cache"]["arcpy_mosaic_gdb"] = str(
+            RUNTIME_ROOT / "data" / "regional_cache" / "HGAC_DEM_Cache.gdb"
+        )
     cache_root = abs_project_path(cfg["dem_cache"].get("cache_root", "data/regional_cache/dem"))
     cfg["dem_cache"]["cache_root"] = str(cache_root)
     rdem = str(cfg["dem_cache"].get("regional_dem_path", "") or "").strip()
@@ -214,7 +233,7 @@ def new_job(kind: str, title: str, worker):
             j = JOBS[jid]
             j["status"] = "running"
             j["started_at"] = time.time()
-            j["message"] = "Starting…"
+            j["message"] = "Startingâ€¦"
         try:
             result = worker(jid)
             with LOCK:
@@ -339,7 +358,7 @@ def workspace_paths():
 
 
 def recent_workspaces():
-    root = APP_ROOT / "workspaces"
+    root = RUNTIME_ROOT / "workspaces"
     rows = []
     if not root.exists():
         return rows
@@ -569,10 +588,10 @@ def api_analysis_start():
     rcfg = regional_cfg()
 
     def worker(jid):
-        cache = APP_ROOT / "data" / "regional_cache" / "gauges" / str(sel["name"]).replace(" ", "_")[:50]
+        cache = RUNTIME_ROOT / "data" / "regional_cache" / "gauges" / str(sel["name"]).replace(" ", "_")[:50]
         update_job(
             jid, step="A", progress=3,
-            message=f"Selected {sel['name']}. Finding the best downstream USGS control automatically…",
+            message=f"Selected {sel['name']}. Finding the best downstream USGS control automaticallyâ€¦",
             help_text="You do not need to choose a gauge. The app checks same-waterway naming, watershed connectivity, and recent discharge.",
         )
         base_radius = float(rcfg["regional"].get("gauge_search_radius_km", 30.0))
@@ -584,7 +603,7 @@ def api_analysis_start():
             radius_km=base_radius, max_candidates_to_test=base_n, cache_root=cache,
         )
         if best is None:
-            update_job(jid, step="A", progress=10, message="No usable control in the first search; looking farther downstream on the same waterway…")
+            update_job(jid, step="A", progress=10, message="No usable control in the first search; looking farther downstream on the same waterwayâ€¦")
             best, candidates2 = choose_best_gauge(
                 float(sel["click_lon"]), float(sel["click_lat"]),
                 selected_channel_geom=sel.get("geometry"),
@@ -607,15 +626,15 @@ def api_analysis_start():
             STATE["selected_gauge_site"] = best["site_no"]
         update_job(
             jid, step="B", progress=15,
-            message=f"Using USGS {best['site_no']} — {best['name']}. Preparing/reusing the bayou workspace…",
+            message=f"Using USGS {best['site_no']} â€” {best['name']}. Preparing/reusing the bayou workspaceâ€¦",
             help_text="This gauge was selected automatically because it is on the same named waterway, downstream of the selected point, and has recent discharge.",
         )
 
         watershed = watershed_for_click(watersheds, sel["click_lon"], sel["click_lat"]) if watersheds is not None else None
-        prospective = workspace_path(APP_ROOT, sel["name"], best["site_no"])
+        prospective = workspace_path(RUNTIME_ROOT, sel["name"], best["site_no"])
         ws_exists = prospective.exists() and (prospective / "config" / "config.yaml").exists()
         ws, config_path, _ = create_workspace(
-            APP_ROOT, sel, best, base_cfg=base_workspace_settings(), watershed=watershed,
+            RUNTIME_ROOT, sel, best, base_cfg=base_workspace_settings(), watershed=watershed,
             overwrite_config=not ws_exists,
         )
         with LOCK:
@@ -641,7 +660,7 @@ def api_analysis_start():
             }
             update_job(
                 jid, step=step, progress=mapping.get(step, 20),
-                message=labels.get(step, evt.get("message", "Working…")),
+                message=labels.get(step, evt.get("message", "Workingâ€¦")),
                 status=evt.get("status", "running"),
                 help_text=evt.get("message", "The app is working in the background. Keep this page open."),
             )
@@ -652,7 +671,7 @@ def api_analysis_start():
 
         update_job(
             jid, step="DATA", progress=97,
-            message="Collecting the gauge history, rainfall forecast, and optional Flood Hub information…",
+            message="Collecting the gauge history, rainfall forecast, and optional Flood Hub informationâ€¦",
             help_text="These are supplemental dashboard datasets. A temporary rainfall/Flood Hub failure will not invalidate the completed USGS/NWM/LiDAR flood screen.",
         )
         cfg_loaded = load_config(config_path)
@@ -669,7 +688,7 @@ def api_analysis_start():
             "data_sources": bundle,
         }
 
-    jid = new_job("analysis", f"Run complete flood intelligence — {sel['name']}", worker)
+    jid = new_job("analysis", f"Run complete flood intelligence â€” {sel['name']}", worker)
     return jsonify({"job_id": jid})
 
 
@@ -682,9 +701,9 @@ def api_gauges_start():
     rcfg = regional_cfg()
 
     def worker(jid):
-        update_job(jid, step="G1", progress=5, message="Searching nearby USGS streamgages…", help_text="This step checks multiple nearby gauges rather than blindly using the closest one.")
-        cache = APP_ROOT / "data" / "regional_cache" / "gauges" / str(sel["name"]).replace(" ", "_")[:50]
-        update_job(jid, step="G2", progress=25, message="Testing upstream-basin connectivity and recent gauge data…", help_text="Each candidate may require an NLDI basin request and a recent USGS observation request, so this can take a minute.")
+        update_job(jid, step="G1", progress=5, message="Searching nearby USGS streamgagesâ€¦", help_text="This step checks multiple nearby gauges rather than blindly using the closest one.")
+        cache = RUNTIME_ROOT / "data" / "regional_cache" / "gauges" / str(sel["name"]).replace(" ", "_")[:50]
+        update_job(jid, step="G2", progress=25, message="Testing upstream-basin connectivity and recent gauge dataâ€¦", help_text="Each candidate may require an NLDI basin request and a recent USGS observation request, so this can take a minute.")
         base_radius = float(rcfg["regional"].get("gauge_search_radius_km", 30.0))
         base_n = max(20, int(rcfg["regional"].get("gauge_candidates_to_test", 8)))
         best, candidates = choose_best_gauge(
@@ -705,7 +724,7 @@ def api_gauges_start():
         if best is None:
             update_job(
                 jid, step="G2B", progress=62,
-                message="No same-bayou live control passed the first screen; expanding the search…",
+                message="No same-bayou live control passed the first screen; expanding the searchâ€¦",
                 help_text="The app is looking farther along the same bayou for an active discharge gauge. Do not choose an unrelated tributary gauge just because it is closer.",
             )
             best2, candidates2 = choose_best_gauge(
@@ -785,9 +804,9 @@ def api_pipeline_start():
     rcfg = regional_cfg()
 
     def worker(jid):
-        update_job(jid, step="SETUP", progress=2, message="Creating or reopening the persistent bayou workspace…", help_text="Static terrain products are saved by bayou/gauge and reused on future refreshes.")
+        update_job(jid, step="SETUP", progress=2, message="Creating or reopening the persistent bayou workspaceâ€¦", help_text="Static terrain products are saved by bayou/gauge and reused on future refreshes.")
         watershed = watershed_for_click(watersheds, sel["click_lon"], sel["click_lat"]) if watersheds is not None else None
-        prospective = workspace_path(APP_ROOT, sel["name"], gauge["site_no"])
+        prospective = workspace_path(RUNTIME_ROOT, sel["name"], gauge["site_no"])
         ws_exists = prospective.exists() and (prospective / "config" / "config.yaml").exists()
         ws, config_path, _ = create_workspace(
             APP_ROOT, sel, gauge, base_cfg=base_workspace_settings(), watershed=watershed,
@@ -804,7 +823,7 @@ def api_pipeline_start():
         update_job(jid, step="10", progress=100, message="Bayou model prepared and live flood screen refreshed.", status="done", help_text="You can now use Live Dashboard. Future refreshes reuse the static cache.")
         return {"workspace": str(ws), "static_status": result.get("static", {}).get("status"), "scenario": result.get("live", {}).get("scenario_label")}
 
-    jid = new_job("pipeline", "Prepare selected bayou and run 00 → 10", worker)
+    jid = new_job("pipeline", "Prepare selected bayou and run 00 â†’ 10", worker)
     return jsonify({"job_id": jid})
 
 
@@ -815,7 +834,7 @@ def api_live_start():
         return jsonify({"error": "Prepare the selected bayou model first."}), 409
 
     def worker(jid):
-        update_job(jid, step="06", progress=10, message="Starting near-real-time refresh…", help_text=STEP_HELP["06"])
+        update_job(jid, step="06", progress=10, message="Starting near-real-time refreshâ€¦", help_text=STEP_HELP["06"])
         meta = run_live_workspace(ws, cfg, progress=pipeline_callback(jid))
         try:
             with LOCK:
@@ -824,7 +843,7 @@ def api_live_start():
                 site = STATE.get("selected_gauge_site")
             gauge = next((g for g in gauges if str(g.get("site_no")) == str(site)), None)
             if sel and gauge:
-                update_job(jid, step="DATA", progress=96, message="Refreshing NWS rainfall and Google Flood Hub comparison…", help_text="Flood Hub is an independent AI forecast/status layer; it does not replace the local NWM/LiDAR screen.")
+                update_job(jid, step="DATA", progress=96, message="Refreshing NWS rainfall and Google Flood Hub comparisonâ€¦", help_text="Flood Hub is an independent AI forecast/status layer; it does not replace the local NWM/LiDAR screen.")
                 refresh_live_supplemental(ws, load_config(cfg), sel, gauge)
         except Exception as exc:
             update_job(jid, step="DATA", progress=97, message=f"Supplemental Google/NWS refresh warning: {exc}", help_text="The core USGS/NWM/LiDAR flood screen is still valid for this refresh.")
@@ -1008,7 +1027,7 @@ def api_workspaces():
 def api_workspace_open():
     payload = request.get_json(force=True) or {}
     p = Path(str(payload.get("path", ""))).resolve()
-    root = (APP_ROOT / "workspaces").resolve()
+    root = (RUNTIME_ROOT / "workspaces").resolve()
     if not p.exists() or root not in p.parents:
         return jsonify({"error": "Invalid workspace path."}), 400
     load_workspace_into_state(p)
@@ -1035,7 +1054,7 @@ def api_cache():
 def api_cache_vrt_start():
     rcfg = regional_cfg(); cache = Path(rcfg["dem_cache"]["cache_root"]); out = cache / "hgac_dem_cache.vrt"
     def worker(jid):
-        update_job(jid, step="DEM", progress=10, message="Building GDAL virtual mosaic from cached DEM tiles…", help_text="This does not duplicate raster data; it creates a lightweight virtual mosaic index.")
+        update_job(jid, step="DEM", progress=10, message="Building GDAL virtual mosaic from cached DEM tilesâ€¦", help_text="This does not duplicate raster data; it creates a lightweight virtual mosaic index.")
         p = build_virtual_mosaic(cache, out)
         update_job(jid, step="DEM", progress=100, message="Regional VRT cache is ready.", status="done", help_text="Point dem_cache.regional_dem_path to this VRT for fastest bayou cropping.")
         return {"path": str(p)}
@@ -1048,7 +1067,7 @@ def api_cache_arcpy_start():
     gdb = abs_project_path(rcfg["dem_cache"].get("arcpy_mosaic_gdb", "data/regional_cache/HGAC_DEM_Cache.gdb"))
     name = rcfg["dem_cache"].get("arcpy_mosaic_name", "HGAC_DEM_CACHE")
     def worker(jid):
-        update_job(jid, step="ARCPY", progress=5, message="Creating/updating ArcGIS Mosaic Dataset…", help_text="Run the app with an ArcGIS Pro Python environment if ArcPy is not visible in the current .venv.")
+        update_job(jid, step="ARCPY", progress=5, message="Creating/updating ArcGIS Mosaic Datasetâ€¦", help_text="Run the app with an ArcGIS Pro Python environment if ArcPy is not visible in the current .venv.")
         p = build_arcpy_mosaic_dataset(cache, gdb, name)
         update_job(jid, step="ARCPY", progress=100, message="ArcGIS Mosaic Dataset is ready.", status="done")
         return {"path": str(p)}
@@ -1125,7 +1144,7 @@ def api_scenario_start():
             progress_map = {"S1": 25, "S2": 55, "S3": 100}
             update_job(
                 jid, step=step, progress=progress_map.get(step, 30),
-                message=evt.get("message", "Running rainfall scenario…"),
+                message=evt.get("message", "Running rainfall scenarioâ€¦"),
                 status=evt.get("status", "running"),
                 help_text=(
                     "This is a hypothetical rainfall sensitivity screen. Google Flood Hub is not forced with custom rainfall; "
@@ -1138,7 +1157,7 @@ def api_scenario_start():
         )
         return {"scenario": meta.get("scenario_label"), "area_sqmi": meta.get("inundated_area_sqmi"), "max_depth_m": meta.get("max_depth_m")}
 
-    jid = new_job("scenario", f"Rainfall scenario — {rainfall_in:g} in over {duration_hours:g} h", worker)
+    jid = new_job("scenario", f"Rainfall scenario â€” {rainfall_in:g} in over {duration_hours:g} h", worker)
     return jsonify({"job_id": jid})
 
 
@@ -1211,14 +1230,26 @@ def start_catalog_on_boot():
 
 def main():
     start_catalog_on_boot()
-    port = int(os.getenv("HGAC_APP_PORT", "8765"))
-    host = "127.0.0.1"
-    url = f"http://{host}:{port}"
-    print("\nH-GAC Regional Flood Intelligence V5.2")
-    print("Simple one-click regional web application")
-    print(f"Opening: {url}")
-    print("Press Ctrl+C in this PowerShell window to stop the app.\n")
-    Timer(1.4, lambda: webbrowser.open(url)).start()
+
+    # Render and similar platforms provide PORT. Local Windows runs continue
+    # to use HGAC_APP_PORT/8765.
+    port = int(os.getenv("PORT", os.getenv("HGAC_APP_PORT", "8765")))
+    host = os.getenv("HOST", "0.0.0.0" if PUBLIC_MODE else "127.0.0.1")
+
+    display_host = "127.0.0.1" if host == "0.0.0.0" else host
+    url = f"http://{display_host}:{port}"
+
+    print("\nH-GAC Regional Flood Intelligence V5.3")
+    print("Regional flood-intelligence web application")
+    print(f"Listening on {host}:{port}")
+    print(f"Runtime data root: {RUNTIME_ROOT}")
+
+    # A cloud container must not try to launch a browser.
+    if not PUBLIC_MODE:
+        print(f"Opening: {url}")
+        print("Press Ctrl+C in this PowerShell window to stop the app.\n")
+        Timer(1.4, lambda: webbrowser.open(url)).start()
+
     try:
         from waitress import serve
         serve(app, host=host, port=port, threads=8)
@@ -1228,3 +1259,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

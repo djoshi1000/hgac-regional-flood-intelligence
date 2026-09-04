@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: hgac-regional-flood-intelligence
+    runtime: docker
+    plan: 2c-4g
+    region: ohio
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    maxShutdownDelaySeconds: 300
+
+    envVars:
+      - key: HGAC_PUBLIC_MODE
+        value: "1"
+      - key: HGAC_RUNTIME_ROOT
+        value: "/var/data"
+      - key: FLOODHUB_API_KEY
+        sync: false
+      - key: FLOODHUB_GAUGE_ID
+        value: ""
+
+    disk:
+      name: hgac-runtime
+      mountPath: /var/data
+      sizeGB: 20
